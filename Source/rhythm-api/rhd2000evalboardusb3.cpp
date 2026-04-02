@@ -2255,19 +2255,21 @@ void Rhd2000EvalBoardUsb3::trigEraseSectors (int address, int sectors)
 
     do
     {
-        std::this_thread::sleep_for (std::chrono::milliseconds (300));        //typical sector erases take 100ms, long ones are longer
+        //std::this_thread::sleep_for (std::chrono::milliseconds (150));        //typical sector erases take 100ms, long ones are longer
         dev->UpdateTriggerOuts();
         if (dev->IsTriggered (0x60, 0x0001))
         {
             printf ("Erased %d sector(s) starting at address 0x%04X.\n", (sectors), address);
             break;
         }
+        /*
         if (i > 256)
         {
             printf ("Error: Timeout in EraseSectors -- Erasure failed.\n");
             break;
         }
         i++;
+        */
     } while (1);
 }
 

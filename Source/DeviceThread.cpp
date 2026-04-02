@@ -49,7 +49,7 @@ using namespace RhythmNode;
 //#define DEBUG_EMULATE_HEADSTAGES 8
 //#define DEBUG_EMULATE_64CH
 
-#define INIT_STEP 256
+#define INIT_STEP 128 
 
 DataThread* DeviceThread::createDataThread (SourceNode* sn)
 {
@@ -396,13 +396,12 @@ void DeviceThread::initializeBoard()
     // Start SPI interface
     evalBoard->run();
 
-    // Wait for the 60-sample run to complete
+    // Wait for the 1024-sample run to complete
     while (evalBoard->isRunning())
     {
         ;
     }
- 
-
+   
     // Read the resulting single data block from the USB interface. We don't
     // need to do anything with this, since it was only used for ADC calibration
     ScopedPointer<Rhd2000DataBlockUsb3> dataBlock = new Rhd2000DataBlockUsb3 (evalBoard->getNumEnabledDataStreams());
@@ -428,6 +427,12 @@ void DeviceThread::initializeBoard()
     //set the length,address, and repeat count to 0 upon start.
     evalBoard->trigWrite("init", -1);
     evalBoard->setPatternStimRepeatCount (0);
+
+    //set stim voltage high for G3 once during init phase.
+    //HectoSTAR, assert the LDO voltage to 6V allowing for stimulation to occur.
+    evalBoard->setStimVoltage (true);
+
+    
 }
 
 void DeviceThread::scanPorts()
@@ -1146,9 +1151,9 @@ int DeviceThread::setSampleRate (int sampleRateIndex, bool isTemporary)
             settings.boardSampleRate = 30000.0f;
             break;
         default:
-            sampleRate = Rhd2000EvalBoardUsb3::SampleRate10000Hz;
-            numUsbBlocksToRead = 6;
-            settings.boardSampleRate = 10000.0f;
+            sampleRate = Rhd2000EvalBoardUsb3::SampleRate20000Hz;
+            numUsbBlocksToRead = 12;
+            settings.boardSampleRate = 20000.0f;
     }
 
     // Select per-channel amplifier sampling rate.
@@ -1356,10 +1361,6 @@ bool DeviceThread::startAcquisition()
 
     blockSize = dataBlock->calculateDataBlockSizeInWords (evalBoard->getNumEnabledDataStreams());
     evalBoard->flush();
-    
-
-    //HectoSTAR, assert the LDO voltage to 6V allowing for stimulation to occur.
-    evalBoard->setStimVoltage (true);
 
     usbThread->startAcquisition (blockSize * 2);
     evalBoard->setContinuousRunMode (true);
@@ -1522,10 +1523,15 @@ bool DeviceThread::updateBuffer()
             index += 2;
         }
 
-        uint16 stimEventWord1 = *((uint16*) (bufferPtr + tempttl)); //also used for pattern stim. (just bit 0)
+        uint16 stimEventWord1 = *((uint16*) (bufferPtr + tempttl)); 
         uint16 stimEventWord2 = *((uint16*) (bufferPtr + tempttl + 2));
         uint16 stimEventWord3 = *((uint16*) (bufferPtr + tempttl + 4));
         uint16 stimEventWord4 = *((uint16*) (bufferPtr + tempttl + 6));
+        uint16 stimEventWord5 = *((uint16*) (bufferPtr + tempttl + 8));
+        uint16 stimEventWord6 = *((uint16*) (bufferPtr + tempttl + 10));
+        uint16 stimEventWord7 = *((uint16*) (bufferPtr + tempttl + 12));
+        uint16 stimEventWord8 = *((uint16*) (bufferPtr + tempttl + 14));
+
 
         uint16 inputTTLWord = *((uint16*) (bufferPtr + index));
 
@@ -1535,6 +1541,7 @@ bool DeviceThread::updateBuffer()
 
         // Compute whether stim is happening
         uint64 stimActive = (stimEventWord1 != 0) || (stimEventWord2 != 0) || (stimEventWord3 != 0) || (stimEventWord4 != 0);
+        stimActive |= (stimEventWord5 != 0) || (stimEventWord6 != 0) || (stimEventWord7 != 0) || (stimEventWord8 != 0);
 
         // Put stimActive into bit 7 (the 8th bit)
         ttlEventWord |= (stimActive << 7);

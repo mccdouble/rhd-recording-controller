@@ -49,6 +49,7 @@ ChannelList::ChannelList (DeviceThread* board_, DeviceEditor* editor_) : board (
     outputTypeSelect->addListener (this);
     outputTypeSelect->setSelectedId (1, dontSendNotification);
     addAndMakeVisible (outputTypeSelect.get());
+    selectedStimOutputType = 0; //set default output.
 
     //upload stim parameters
     uploadStimParamButton = std::make_unique<ColourButton> ("Upload Stim Parameters", FontOptions (14.0f));
@@ -272,7 +273,7 @@ void ChannelList::buttonClicked (Button* btn)
             int64_t fileLength = chosenFile.getSize();
 
             String message = "File Name: " + filename + "\n" + "File Length: " + juce::String (fileLength) + " bytes";
-            AlertWindow::showMessageBoxAsync (juce::AlertWindow::InfoIcon, "Uploading Please Wait...", message);
+            AlertWindow::showMessageBoxAsync (juce::AlertWindow::InfoIcon, "Uploading. Press Ok and Wait for Success Message", message);
 
             // Do the upload
             int uploaded = board->uploadPatternFile(chosenFile);
@@ -374,11 +375,15 @@ void ChannelList::disableAll()
 void ChannelList::enableAll()
 {
     uploadStimParamButton->setEnabled (true);
+    selectPatternFileButton->setEnabled (true);
+
     //Initialize the led toggle buttons
     for (int i = 0; i < 64; ++i)
     {
         toggleButtons[i]->setEnabled (true);
     }
+
+
 }
 
 
@@ -409,5 +414,8 @@ void ChannelList::comboBoxChanged (ComboBox* b)
                 patternOutputLabel->setVisible(true);
             }
         }
+
+        CoreServices::updateSignalChain (editor);
+
     }
 }

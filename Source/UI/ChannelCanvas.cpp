@@ -51,7 +51,7 @@ ChannelCanvas::ChannelCanvas (DeviceThread* board_,
 
 void ChannelCanvas::paint (Graphics& g)
 {
-     g.fillAll(Colours::grey);
+    g.fillAll(Colours::grey);
     g.setColour(juce::Colours::black);
 
     // Define the width and gap of the shanks
