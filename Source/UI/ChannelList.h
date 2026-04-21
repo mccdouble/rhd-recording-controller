@@ -32,6 +32,7 @@ namespace RhythmNode
 class DeviceThread;
 class DeviceEditor;
 class ChannelComponent;
+class ChannelCanvas; 
 
 class ChannelList : public Component,
                     public Button::Listener,
@@ -66,6 +67,12 @@ public:
     /** Returns the maximum number of channels (used for setting layout) */
     int getMaxChannels() { return maxChannels; }
 
+    /** Allows us to call repain() function from here depending on selected probe geometry*/
+    void setOwnerCanvas (ChannelCanvas* canvas) { ownerCanvas = canvas; }
+
+    void paint (juce::Graphics& g) override;
+
+
 private:
     Array<float> gains;
     Array<ChannelInfoObject::Type> types;
@@ -81,19 +88,18 @@ private:
 
     //G3 Chip Stim Specific
     //galvani 3 waveform parameters
-    int amplitude, period, pulse_width, edge_sel, pulse_count;
+    int amplitude = 0, period = 0, pulse_width = 0, edge_sel = 0, pulse_count = 0;
+    int repeatCount = 0;
 
-    //g3 pattern stim parameters
-    int repeatCount;
+    //Probe Geometry Selection (defaults to 4 shank)
+    std::unique_ptr<ComboBox> probeTypeSelect;
+    int shankCount = 4; // 4, 2, or 1
+    int buttonCountPerShank = 16; // 16 for 4-shank, 32 for 2/1-shank
 
-    //selected output type
-    //false (0) is pulse output
-    //true  (1) is pattern output
-    int selectedStimOutputType;
-    
     //output type select
     std::unique_ptr<ComboBox> outputTypeSelect;
     std::unique_ptr<Label> outputTypeLabel;
+    int selectedStimOutputType = 0; // 0=pulse, 1=pattern
 
     //upload stim param buttons
     std::unique_ptr<ColourButton> uploadStimParamButton;
@@ -116,23 +122,45 @@ private:
     //galvani 3 LED Channel Toggle Buttons, Depends on the probe
     //geometry UPDATE THIS 
     std::unique_ptr<ToggleButton> toggleButtons[64];
-    int shankCount = 4;
-    int buttonCountPerShank = 16;
-    int totalButtons = shankCount * buttonCountPerShank;
 
+   
     //displays if pattern output is selected. disables toggle button LEDS.
     std::unique_ptr<Label> patternOutputLabel;
 
     //**G3 LED Channel Mapping array
-    int ledMapping[64] = { 16, 31, 17, 30, 18, 29, 19, 28, 20, 27, 21, 26, 22, 25, 23, 24, 0, 15, 1,
+    int ledMapping[64] = {16, 31, 17, 30, 18, 29, 19, 28, 20, 27, 21, 26, 22, 25, 23, 24, 0, 15, 1,
         14, 2, 13, 3, 12, 4, 11, 5, 10, 6, 9, 7, 8, 47, 32, 46, 33, 45, 34, 44, 35, 43, 36, 42, 37,
         41, 38, 40, 39, 63, 48, 62, 49, 61, 50, 60, 51, 59, 52, 58, 53, 57, 54, 56, 55 };
+
+    //chronic 4 shank mapping.     
+    int four_Shank_mapping[64] = {16, 31, 17, 30, 18, 29, 19, 28, 20, 27, 21, 26, 22, 25, 23, 24, 0, 15, 1,
+        14, 2, 13, 3, 12, 4, 11, 5, 10, 6, 9, 7, 8, 47, 32, 46, 33, 45, 34, 44, 35, 43, 36, 42, 37,
+        41, 38, 40, 39, 63, 48, 62, 49, 61, 50, 60, 51, 59, 52, 58, 53, 57, 54, 56, 55 };
+
+    //THIS IS WRONG
+    int two_Shank_mapping[64] = { 16, 31, 17, 30, 18, 29, 19, 28, 20, 27, 21, 26, 22, 25, 23, 24, 0, 15, 1,
+        14, 2, 13, 3, 12, 4, 11, 5, 10, 6, 9, 7, 8, 47, 32, 46, 33, 45, 34, 44, 35, 43, 36, 42, 37,
+        41, 38, 40, 39, 63, 48, 62, 49, 61, 50, 60, 51, 59, 52, 58, 53, 57, 54, 56, 55 };
+    
+    //THIS IS WRONG;
+    int one_Shank_mapping[64] = { 16, 31, 17, 30, 18, 29, 19, 28, 20, 27, 21, 26, 22, 25, 23, 24, 0, 15, 1,
+        14, 2, 13, 3, 12, 4, 11, 5, 10, 6, 9, 7, 8, 47, 32, 46, 33, 45, 34, 44, 35, 43, 36, 42, 37,
+        41, 38, 40, 39, 63, 48, 62, 49, 61, 50, 60, 51, 59, 52, 58, 53, 57, 54, 56, 55 };
+
+    int demo_Board_mapping[64] = {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+                    31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16,
+                    63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48,
+                    47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32};
+
 
 
     OwnedArray<Label> staticLabels;
     OwnedArray<ChannelComponent> channelComponents;
 
     int maxChannels;
+
+    ChannelCanvas* ownerCanvas = nullptr;
+
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChannelList);
 };

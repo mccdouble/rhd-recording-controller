@@ -25,6 +25,8 @@
 #include <mutex>
 #include <queue>
 #include <vector>
+#include <chrono>
+#include <thread>
 
 #include "rhd2000datablockusb3.h"
 #include "rhd2000evalboardusb3.h"
@@ -2245,6 +2247,7 @@ void Rhd2000EvalBoardUsb3::setStimVoltage (bool stimVoltage)
 //erase data from selected flash sectors
 void Rhd2000EvalBoardUsb3::trigEraseSectors (int address, int sectors)
 {
+
     int i = 0;
 
     dev->SetWireInValue (ADDR, address); // Send starting address

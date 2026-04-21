@@ -22,7 +22,7 @@
 */
 
 #include "ChannelList.h"
-
+#include "ChannelCanvas.h"
 #include "ChannelComponent.h"
 
 #include "../DeviceEditor.h"
@@ -35,11 +35,19 @@ ChannelList::ChannelList (DeviceThread* board_, DeviceEditor* editor_) : board (
 {
     channelComponents.clear();
 
+    //Probe Geometry Selection 
+
+
     //label for stim output selection (Pulse or Pattern).
-    outputTypeLabel = std::make_unique<Label> ("Output Select", "Output Select");
-    outputTypeLabel->setEditable (false);
-    outputTypeLabel->setBounds (10, 10, 150, 25);
-    addAndMakeVisible (outputTypeSelect.get());
+    probeTypeSelect = std::make_unique<ComboBox> ("Probe Select");
+    probeTypeSelect->addItem ("4-Shank", 1);
+    probeTypeSelect->addItem ("2-Shank", 2);
+    probeTypeSelect->addItem ("1-Shank", 3);
+    probeTypeSelect->addItem ("Demo Board", 4);
+    probeTypeSelect->setBounds (10, 10, 100, 25);
+    probeTypeSelect->addListener (this);
+    probeTypeSelect->setSelectedId (1, dontSendNotification);
+    addAndMakeVisible (probeTypeSelect.get());
 
     //Output Selection Button
     outputTypeSelect = std::make_unique<ComboBox> ("Output Selection");
@@ -135,7 +143,10 @@ ChannelList::ChannelList (DeviceThread* board_, DeviceEditor* editor_) : board (
     for (int i = 0; i < 64; ++i)
     {
         toggleButtons[i] = std::make_unique<ToggleButton> ("");
-        toggleButtons[i]->setSize(100, 100);
+        toggleButtons[i]->setClickingTogglesState (true);
+        toggleButtons[i]->setTriggeredOnMouseDown (true);
+        toggleButtons[i]->setWantsKeyboardFocus (false);
+
         toggleButtons[i]->addListener (this);
         addAndMakeVisible (toggleButtons[i].get());
     }
@@ -171,7 +182,7 @@ void ChannelList::lookAndFeelChanged()
 
     //probably put the color selections here, make the default colors changed upon the theme color changing from editior,   
 
-    outputTypeLabel->setColour (Label::textColourId, findColour (ThemeColours::defaultText));
+    //outputTypeLabel->setColour (Label::textColourId, findColour (ThemeColours::defaultText));
     uploadStimParamButton->setColours (findColour (ThemeColours::defaultText), findColour (ThemeColours::highlightedFill));  
     selectPatternFileButton->setColours (findColour (ThemeColours::defaultText), findColour (ThemeColours::defaultFill));
   
@@ -188,7 +199,6 @@ void ChannelList::lookAndFeelChanged()
     patternOutputLabel->setFont (juce::Font (16.0f, juce::Font::bold));
 
     //numberingSchemeLabel->setColour (Label::textColourId, findColour (ThemeColours::defaultText));
-
 
 
     update();
@@ -310,56 +320,6 @@ void ChannelList::buttonClicked (Button* btn)
     
 }
 
-void ChannelList::update()
-{
-    if (! board->foundInputSource())
-    {
-        disableAll();
-        return;
-    }
-
-    staticLabels.clear();
-    channelComponents.clear();
-    uploadStimParamButton->setEnabled (true); //g3 change here
-
-    const int columnWidth = 250;
-
-    Array<const Headstage*> headstages = board->getConnectedHeadstages();
-
-    int column = -1;
-
-    maxChannels = 16; //this is the number of LEDs
-
-    const float shankThickness = 2.0f;
-    const float gap = shankThickness * 8.0f;
-    const float startX = 55.0f;
-    const float shankHeight = 500.0f;
-    const float startY = 130.0f;
-    const float shankWidth = 80.0f;
-    const float buttonWidth = (shankWidth / 2.0f) + 10; // Use the same width as shankWidth for simplicity
-    const float buttonHeight = (shankHeight - shankWidth * 0.5f) / buttonCountPerShank;
-
-    // Position the toggle buttons
-    for (int i = 0; i < shankCount; ++i)
-    {
-        float xPosition = startX + i * (shankWidth + gap);
-
-        for (int j = 0; j < buttonCountPerShank; ++j)
-        {
-            // Reverse the button placement so CH1 is bottom-most
-            int index = i * buttonCountPerShank + j;
-            int reversedJ = buttonCountPerShank - 1 - j; // This makes j=0 bottom, j=15 top
-
-            toggleButtons[index]->setBounds(
-                (int) (xPosition),
-                (int) (startY + reversedJ * buttonHeight),
-                (int) (buttonWidth / 2),
-                (int) (buttonHeight));
-        }
-    }
-}
-
-
 void ChannelList::disableAll()
 {
 
@@ -382,8 +342,6 @@ void ChannelList::enableAll()
     {
         toggleButtons[i]->setEnabled (true);
     }
-
-
 }
 
 
@@ -395,7 +353,7 @@ void ChannelList::comboBoxChanged (ComboBox* b)
         board->setStimOutputType(selectedStimOutputType);
 
         //pulse stim
-        if (! selectedStimOutputType)
+        if (!selectedStimOutputType)
         {
             patternOutputLabel->setVisible(false);
             //Initialize the led toggle buttons
@@ -407,15 +365,306 @@ void ChannelList::comboBoxChanged (ComboBox* b)
         //pattern stim
         else
         {
-            patternOutputLabel->setVisible(true);
+            patternOutputLabel->setVisible (true);
             for (int i = 0; i < 64; ++i)
             {
-                toggleButtons[i]->setEnabled(false);
-                patternOutputLabel->setVisible(true);
+                toggleButtons[i]->setEnabled (false);
+                patternOutputLabel->setVisible (true);
             }
         }
 
-        CoreServices::updateSignalChain (editor);
+    }
+    else if (b == probeTypeSelect.get())
+    {
+        const int probeGeometry = b->getSelectedId();
 
+        if (probeGeometry == 1) // 4-Shank
+        {
+            shankCount = 4;
+            buttonCountPerShank = 16; 
+            for (int i = 0; i < 64; i++)
+            {
+                ledMapping[i] = four_Shank_mapping[i];
+            }
+
+        }
+        else if (probeGeometry == 2) // 2-Shank
+        {
+            shankCount = 2;
+            buttonCountPerShank = 32;
+            for (int i = 0; i < 64; i++)
+            {
+                ledMapping[i] = two_Shank_mapping[i];
+            }
+        }
+        else if (probeGeometry == 3) // 1-Shank
+        {
+            shankCount = 1;
+            buttonCountPerShank = 32;
+            for (int i = 0; i < 64; i++)
+            {
+                ledMapping[i] = one_Shank_mapping[i];
+            }
+        }
+        else if (probeGeometry == 4) // Demo Board (choose behavior)
+        {
+            shankCount = 4;
+            buttonCountPerShank = 16;
+            for (int i = 0; i < 64; i++)
+            {
+                ledMapping[i] = demo_Board_mapping[i];
+            }
+        }
+         // Update LED layout/visibility
+        update();
     }
 }
+
+void ChannelList::update()
+{
+    if (! board->foundInputSource())
+    {
+        disableAll();
+        return;
+    }
+
+    staticLabels.clear();
+    channelComponents.clear();
+    uploadStimParamButton->setEnabled (true);
+
+    // ---- FIXED LED GEOMETRY: always use 4-lane spacing ----
+    const int ledsPerLane = 16; // fixed for 4-shank spacing
+    const int lanesVisible = (shankCount == 1 ? 2 : 4);
+    const int totalUsed = juce::jmin (64, lanesVisible * ledsPerLane);
+
+    for (int i = 0; i < 64; ++i)
+    {
+        const bool used = (i < totalUsed);
+        toggleButtons[i]->setVisible (used);
+        toggleButtons[i]->setEnabled (used && ! selectedStimOutputType);
+    }
+
+    const float strokeW = 2.0f;
+    const float gap = strokeW * 8.0f;
+
+    const float startX = 50.0f;
+    const float startY = 110.0f;
+
+    const float shankW = 90.0f;
+    const float shankH = 500.0f;
+
+    const int ledSize = 20;
+
+    const float topMargin = 25.0f;
+    const float bottomMargin = 10.0f;
+
+    const float yTop = startY + topMargin;
+    const float yBottom = startY + shankH - bottomMargin;
+
+    const float usable = juce::jmax (1.0f, yBottom - yTop);
+    const float step = usable / (float) ledsPerLane;
+
+    for (int lane = 0; lane < lanesVisible; ++lane)
+    {
+        const float x = startX + lane * (shankW + gap);
+        const float cx = x + shankW * 0.5f;
+
+        for (int j = 0; j < ledsPerLane; ++j)
+        {
+            const int index = lane * ledsPerLane + j;
+            if (index >= 64)
+                continue;
+
+            // LED0 at tip/bottom for each lane
+            const float cy = yBottom - (j + 0.5f) * step;
+
+            toggleButtons[index]->setBounds ((int) std::round (cx - ledSize * 0.5f),
+                                             (int) std::round (cy - ledSize * 0.5f),
+                                             ledSize,
+                                             ledSize);
+        }
+    }
+
+    // keep LEDs clickable if anything overlaps
+    for (int i = 0; i < 64; ++i)
+        if (toggleButtons[i] && toggleButtons[i]->isVisible())
+            toggleButtons[i]->toFront (false);
+
+    repaint();
+}
+
+
+void ChannelList::paint (juce::Graphics& g)
+{
+    g.fillAll (juce::Colours::grey);
+    g.setColour (juce::Colours::black);
+
+    const float strokeW = 2.0f;
+    const float gap = strokeW * 8.0f;
+
+    // Fixed geometry
+    const float startX = 55.0f;
+    const float startY = 130.0f;
+
+    const float shankW = 90.0f;
+    const float shankH = 500.0f;
+
+    const int lanesVisible = (shankCount == 1 ? 2 : 4);
+
+    // Keep electrode drawing simple in this visual: 32 electrodes per lane like 4-shank spacing
+    const int electrodesPerLane = 32;
+    const float electrodeSize = 7.0f;
+    const int positionsAlongY = electrodesPerLane / 2;
+    const float electrodeSpacing = (shankH / (float) positionsAlongY) - 3.0f;
+
+    auto laneLabel = [this] (int lane) -> juce::String
+    {
+        if (shankCount == 4)
+            return "S" + juce::String (lane + 1);
+
+        if (shankCount == 2)
+        {
+            static const char* names[] = { "S1B", "S1T", "S2B", "S2T" };
+            return names[lane];
+        }
+
+        // shankCount == 1
+        static const char* names[] = { "S1B", "S1T" };
+        return names[lane];
+    };
+
+    auto laneHasPointyTip = [this] (int lane) -> bool
+    {
+        if (shankCount == 4)
+            return true; // all pointy
+        if (shankCount == 2)
+            return (lane == 0 || lane == 2); // only bottom halves
+        return (lane == 0); // 1-shank: only S1B
+    };
+
+    auto laneNeedsBreakAtTop = [this] (int lane) -> bool
+    {
+        if (shankCount == 2)
+            return (lane == 0 || lane == 2); // top of S1B/S2B
+        if (shankCount == 1)
+            return (lane == 0); // top of S1B
+        return false;
+    };
+
+    auto laneNeedsBreakAtBottom = [this] (int lane) -> bool
+    {
+        if (shankCount == 2)
+            return (lane == 1 || lane == 3); // bottom of S1T/S2T
+        if (shankCount == 1)
+            return (lane == 1); // bottom of S1T
+        return false;
+    };
+
+    auto drawBreakLine = [&g] (float x, float y, float w)
+    {
+        juce::Path p;
+        p.startNewSubPath (x, y);
+        p.lineTo (x + w, y);
+
+        juce::Path dashed;
+        const float dashes[] = { 1.0f, 1.0f };
+        juce::PathStrokeType (5.0f).createDashedStroke (dashed, p, dashes, 2);
+
+        g.strokePath (dashed, juce::PathStrokeType (5.0f));
+    };
+
+    auto drawFlatShank = [&g, strokeW] (float x, float y, float w, float h)
+    {
+        g.drawRect (juce::Rectangle<float> (x, y, w, h), strokeW);
+    };
+
+    auto drawPointyShank = [&g, strokeW] (float x, float y, float w, float h)
+    {
+        juce::Path outline;
+        outline.startNewSubPath (x - 5.0f, y);
+        outline.lineTo (x, y + h - (w * 0.5f));
+        outline.lineTo (x + w / 2.0f, y + h);
+        outline.lineTo (x + w, y + h - (w * 0.5f));
+        outline.lineTo (x + w, y);
+        outline.closeSubPath();
+        g.strokePath (outline, juce::PathStrokeType (strokeW));
+    };
+
+    for (int lane = 0; lane < lanesVisible; ++lane)
+    {
+        const float x = startX + lane * (shankW + gap);
+        const float y = startY;
+
+        if (laneHasPointyTip (lane))
+            drawPointyShank (x, y, shankW, shankH);
+        else
+            drawFlatShank (x, y, shankW, shankH);
+
+        if (laneNeedsBreakAtTop (lane))
+            drawBreakLine (x, y, shankW);
+
+        if (laneNeedsBreakAtBottom (lane))
+            drawBreakLine (x, y + shankH, shankW);
+
+        g.setFont (14.0f);
+        g.drawText (laneLabel (lane),
+                    (int) x,
+                    (int) (y - 22.0f),
+                    (int) shankW,
+                    20,
+                    juce::Justification::centredTop);
+
+        // Electrodes (visual aid): bottom is lowest number in this lane block
+        const int baseIndex = lane * electrodesPerLane;
+
+        g.setFont (10.0f);
+        for (int j = 0; j < electrodesPerLane; ++j)
+        {
+            const bool isLeft = (j % 2 == 0);
+
+            const int pair = j / 2;
+            const int pairReversed = (positionsAlongY - 1) - pair;
+
+            const float ex = isLeft
+                                 ? (x + electrodeSize + 10.0f)
+                                 : (x + shankW - electrodeSize * 2.0f - 10.0f);
+
+            const float ey = y
+                             + pairReversed * electrodeSpacing
+                             + (isLeft ? 0.0f : electrodeSpacing / 2.0f)
+                             + 25.0f;
+
+            g.setColour (juce::Colours::black);
+            g.fillRect (ex, ey, electrodeSize, electrodeSize);
+
+            const int electrodeNumber = baseIndex + (j + 1);
+            g.drawText ("E" + juce::String (electrodeNumber),
+                        (int) (ex - 12.0f),
+                        (int) (ey - 12.0f),
+                        34,
+                        12,
+                        juce::Justification::centredLeft);
+        }
+    }
+ 
+   // Disclaimer below probe
+    const int disclaimerX = 30;
+    const int disclaimerW = juce::jmax (200, getWidth() - 60);
+
+    const int disclaimerY1 = (int) std::round (startY + shankH + 30.0f);
+    const int disclaimerY2 = disclaimerY1 + 20;
+
+    g.setFont (12.0f);
+    g.drawText ("NOTE: Probe overlay is an approximate visual aid. Please refer to the ",
+                disclaimerX,
+                disclaimerY1,
+                disclaimerW,
+                14,
+                juce::Justification::left);
+    g.drawText ("specific probe geometry for exact LED and Electrodes spacing/location.",
+                disclaimerX,
+                disclaimerY2,
+                disclaimerW,
+                14,
+                juce::Justification::left);
+    }

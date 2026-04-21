@@ -77,6 +77,11 @@ public:
     /** Called when data acquisition ends*/
     void endAnimation() override;
 
+
+    //HECTOSTAR///
+    void setProbeGeometry (int newShankCount);
+    int getShankCount() const { return shankCount; }
+
     /** Child components*/
     std::unique_ptr<Viewport> channelViewport;
     std::unique_ptr<ChannelList> channelList;
@@ -86,6 +91,12 @@ public:
 
     /** Pointer to the editor object*/
     DeviceEditor* editor;
+
+private:
+    //defaults to 4, allows the canvas to be repainted on probe 
+    //geometry selection.
+    int shankCount = 4;
+
 };
 
 } // namespace RhythmNode
